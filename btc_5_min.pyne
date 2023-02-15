@@ -1,0 +1,344 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Aishlin
+
+//@version=5
+strategy("BTC 5 min - test", overlay = true, initial_capital = 100, currency=currency.USD, default_qty_value = 100)
+// Constant
+
+isLive = true
+showIndicators = false
+pof_and_stop_loss = 1.8
+trailing = 0.70
+loss_value = 1.5
+givenAdxLimit = 30
+sideways_factor =  0.29
+
+// -- ADX
+
+adxlen = input(14, title="ADX Smoothing")
+dilen = input(14, title="DI Length")
+dirmov(len) =>
+	up = ta.change(high)
+	down = -ta.change(low)
+	plusDM = na(up) ? na : (up > down and up > 0 ? up : 0)
+	minusDM = na(down) ? na : (down > up and down > 0 ? down : 0)
+	truerange = ta.rma(ta.tr, len)
+	plus = fixnan(100 * ta.rma(plusDM, len) / truerange)
+	minus = fixnan(100 * ta.rma(minusDM, len) / truerange)
+	[plus, minus]
+adx(dilen, adxlen) =>
+	[plus, minus] = dirmov(dilen)
+	sum = plus + minus
+	adx = 100 * ta.rma(math.abs(plus - minus) / (sum == 0 ? 1 : sum), adxlen)
+adx_sig = adx(dilen, adxlen)
+
+isAdxSignal = adx_sig[1] >= givenAdxLimit
+
+//Volume flow
+
+length_vf = input(130, title="VFI length")
+coef = input(0.2)
+vcoef = input(0.5, title="Max. vol. cutoff")
+signalLength=input(20)
+smoothVFI=input(false)
+
+ma(x,y) => smoothVFI ? ta.sma(x,y) : x
+
+typical=hlc3
+inter = math.log( typical ) - math.log( typical[1] )
+vinter = ta.stdev(inter, 30 )
+cutoff = coef * vinter * close
+vave = ta.sma( volume, length_vf )[1]
+vmax = vave * vcoef
+vc = math.min( volume, vmax )
+mf = typical - typical[1]
+vcp = ( mf > cutoff ? vc : mf < -cutoff ? -vc : 0 )
+
+vfi = ma(math.sum( vcp , length_vf )/vave, 3)
+vfima=ta.ema( vfi, signalLength )
+d=vfi-vfima
+
+isLongSingnalFromVolumeFlow = vfima > 0.0 and vfi > 0.0 and vfi > vfima
+isShortSingnalFromVolumeFlow = vfima < 0.0 and vfi < 0.0 and vfi < vfima
+
+
+// STC
+
+EEEEEE = input(12, 'Length')
+BBBB = input(26, 'FastLength')
+BBBBB = input(50, 'SlowLength')
+
+AAAA(BBB, BBBB, BBBBB) =>
+    fastMA = ta.ema(BBB, BBBB)
+    slowMA = ta.ema(BBB, BBBBB)
+    AAAA = fastMA - slowMA
+    AAAA
+
+AAAAA(EEEEEE, BBBB, BBBBB) =>
+    AAA = input(0.5)
+    var CCCCC = 0.0
+    var DDD = 0.0
+    var DDDDDD = 0.0
+    var EEEEE = 0.0
+    BBBBBB = AAAA(close, BBBB, BBBBB)
+    CCC = ta.lowest(BBBBBB, EEEEEE)
+    CCCC = ta.highest(BBBBBB, EEEEEE) - CCC
+    CCCCC := CCCC > 0 ? (BBBBBB - CCC) / CCCC * 100 : nz(CCCCC[1])
+    DDD := na(DDD[1]) ? CCCCC : DDD[1] + AAA * (CCCCC - DDD[1])
+    DDDD = ta.lowest(DDD, EEEEEE)
+    DDDDD = ta.highest(DDD, EEEEEE) - DDDD
+    DDDDDD := DDDDD > 0 ? (DDD - DDDD) / DDDDD * 100 : nz(DDDDDD[1])
+    EEEEE := na(EEEEE[1]) ? DDDDDD : EEEEE[1] + AAA * (DDDDDD - EEEEE[1])
+    EEEEE
+
+mAAAAA = AAAAA(EEEEEE, BBBB, BBBBB)
+mColor = mAAAAA > mAAAAA[1] ? color.new(color.green, 20) : color.new(color.red, 20)
+
+isStcForLong =  mAAAAA > mAAAAA[1]
+isStcForShort = mAAAAA <= mAAAAA[1]
+
+short_l1 = input(5 , title="Short - L1")
+short_l2 = input(20, title="Short - L2")
+short_l3 = input(15, title="Short - L3")
+
+long_l1  = input(20, title="Long - L1")
+long_l2  = input(15, title="Long - L2")
+
+shortTermXtrender = ta.rsi(ta.ema(close, short_l1) - ta.ema(close, short_l2), short_l3 ) - 50
+longTermXtrender  = ta.rsi( ta.ema(close, long_l1), long_l2 ) - 50
+
+shortXtrenderCol = shortTermXtrender > 0 ? shortTermXtrender > shortTermXtrender[1] ? color.lime : #228B22 : shortTermXtrender > shortTermXtrender[1] ? color.red : #8B0000
+//plot(shortTermXtrender, color=shortXtrenderCol, style=plot.style_columns, linewidth=1, title="B-Xtrender Osc. - Histogram", transp = 50)
+isShortTermXtrenderGreen = shortTermXtrender > 0
+isShortTermXtrenderRed = shortTermXtrender < 0
+t3(src, len)=>
+    xe1_1 = ta.ema(src,    len)
+    xe2_1 = ta.ema(xe1_1,  len)
+    xe3_1 = ta.ema(xe2_1,  len)
+    xe4_1 = ta.ema(xe3_1,  len)
+    xe5_1 = ta.ema(xe4_1,  len)
+    xe6_1 = ta.ema(xe5_1,  len)
+    b_1 = 0.7
+    c1_1 = -b_1*b_1*b_1
+    c2_1 = 3*b_1*b_1+3*b_1*b_1*b_1
+    c3_1 = -6*b_1*b_1-3*b_1-3*b_1*b_1*b_1
+    c4_1 = 1+3*b_1+b_1*b_1*b_1+3*b_1*b_1
+    nT3Average_1 = c1_1 * xe6_1 + c2_1 * xe5_1 + c3_1 * xe4_1 + c4_1 * xe3_1
+    
+maShortTermXtrender = t3( shortTermXtrender , 5 )
+
+colShortTermXtrender = maShortTermXtrender > maShortTermXtrender[1] ? color.lime : color.red
+
+bullishDotVisible = maShortTermXtrender > maShortTermXtrender[1] and maShortTermXtrender[1] < maShortTermXtrender[2]
+bearishDotVisible = maShortTermXtrender < maShortTermXtrender[1] and maShortTermXtrender[1] > maShortTermXtrender[2]
+
+longXtrenderCol   = longTermXtrender> 0 ? longTermXtrender > longTermXtrender[1] ? color.lime : #228B22 : longTermXtrender > longTermXtrender[1] ? color.red : #8B0000
+macollongXtrenderCol =  longTermXtrender > longTermXtrender[1] ? color.lime : color.red
+
+isHistBelowZero = longTermXtrender < 0
+isHistAboveZero = longTermXtrender > 0
+
+isLongSignalFromXtrender = (isHistAboveZero and isShortTermXtrenderGreen and bullishDotVisible) or (isHistAboveZero and isShortTermXtrenderRed and bullishDotVisible)
+isShortSignalFromXtrender = (isHistBelowZero and isShortTermXtrenderRed  and bearishDotVisible) or (isHistBelowZero and isShortTermXtrenderGreen and bullishDotVisible)
+
+//TMA overlay
+
+len1 = 21
+//input(21, minval=1, title="Length 1", group = "Smoothed MA Inputs")
+src1 = close
+//input(close, title="Source 1", group = "Smoothed MA Inputs")
+smma1 = 0.0
+sma_1 = ta.sma(src1, len1)
+smma1 := na(smma1[1]) ? sma_1 : (smma1[1] * (len1 - 1) + src1) / len1
+plot(smma1, color=color.white, linewidth=2, title="21 SMMA", display = showIndicators ? display.all : display.none)
+
+
+len2 = 50
+src2 = close
+smma2 = 0.0
+sma_2 = ta.sma(src2, len2)
+smma2 := na(smma2[1]) ? sma_2 : (smma2[1] * (len2 - 1) + src2) / len2
+plot(smma2, color=color.new(#6aff00,0), linewidth=2, title="50 SMMA",  display = showIndicators ? display.all : display.none)
+
+h100 = input(title="Show 100 Line", defval=true, group = "Smoothed MA Inputs")
+len3 = 100
+//input(100, minval=1, title="Length 3", group = "Smoothed MA Inputs")
+src3 = close
+//input(close, title="Source 3", group = "Smoothed MA Inputs")
+smma3 = 0.0
+sma_3 = ta.sma(src3, len3)
+smma3 := na(smma3[1]) ? sma_3 : (smma3[1] * (len3 - 1) + src3) / len3
+sma3plot = plot(h100 ? smma3 : na, color=color.new(color.yellow,0), linewidth=2, title="100 SMMA",  display = showIndicators ? display.all : display.none)
+
+len4 = 200
+src4 = close
+smma4 = 0.0
+sma_4 = ta.sma(src4, len4)
+smma4 := na(smma4[1]) ? sma_4 : (smma4[1] * (len4 - 1) + src4) / len4
+sma4plot = plot(smma4, color=color.new(#ff0500,0), linewidth=2, title="200 SMMA",  display = showIndicators ? display.all : display.none)
+
+length1 = 21
+length2 = 50
+length3 = 100
+length4 = 200
+
+ema1s = ta.ema(close, length1)
+ema2s = ta.ema(close, length2)
+ema3s = ta.ema(close, length3)
+ema4s = ta.ema(close, length4)
+
+isLongSignalFromEma21 = close > ema1s
+isShortSignalFromEma21 = close < ema1s
+
+sidewaysArea = math.abs((ema2s - ema3s)/(ema4s - ema1s))
+
+
+
+// Define the input parameters
+length1s = input(title="Length 1", defval=21)
+length2s = input(title="Length 2", defval=89)
+length3s = input(title="Length 3", defval=200)
+
+// Calculate the 3 EMAs
+ema1ss = ta.ema(close, length1s)
+ema2ss = ta.ema(close, length2s)
+ema3ss = ta.ema(close, length3s)
+
+// Check if the price is sideways
+sideways = (ema1ss >= ema2ss and ema2ss >= ema3ss) or (ema1ss <= ema2ss and ema2ss <= ema3ss)
+
+isUpTrend = ema1ss > ema2ss and ema2ss > ema3ss
+isDownTrend = ema1ss < ema2ss and ema2ss < ema3ss
+
+// Plot the sideways area
+
+plot(sidewaysArea, title="Sideways Area", color=color.red)
+
+// Trend Fill
+
+trendFill = input(title="Show Trend Fill", defval=true, group = "Smoothed MA Inputs") 
+ema2 = ta.ema(close, 2)
+ema2plot = plot(ema2, color=#2ecc71, transp=100, style=plot.style_line, linewidth=1, title="EMA(2)", editable = false,  display = showIndicators ? display.all : display.none)
+
+//fill(ema2plot, sma4plot, color=ema2 > smma4 and trendFill ? color.green : ema2 < smma4 and trendFill ? color.red : na, transp=85, title = "Trend Fill")
+
+// End ###
+
+// ### 3 Line Strike
+
+bearS = input(title="Show Bearish 3 Line Strike", defval=true, group = "3 Line Strike")
+bullS = input(title="Show Bullish 3 Line Strike", defval=true, group = "3 Line Strike")
+
+bearSig = close[3] > open[3] and close[2] > open[2] and close[1] > open[1] and close < open[1]
+bullSig = close[3] < open[3] and close[2] < open[2] and close[1] < open[1] and close > open[1]
+
+plotshape(bullS ? bullSig : na, style=shape.triangleup, color=color.green, location=location.belowbar, size = size.small,  text="3s-Bull", title="3 Line Strike Up",  display = showIndicators ? display.all : display.none)
+plotshape(bearS ? bearSig : na, style=shape.triangledown, color=color.red, location=location.abovebar, size = size.small,  text="3s-Bear", title="3 Line Strike Down",  display = showIndicators ? display.all : display.none)
+
+// End ###
+
+//### Engulfing Candles
+
+bearE = input(title="Show Bearish Big A$$ Candles", defval=false, group = "Big A$$ Candles")
+bullE = input(title="Show Bullish Big A$$ Candles", defval=false, group = "Big A$$ Candles")
+
+openBarPrevious = open[1]
+closeBarPrevious = close[1]
+openBarCurrent = open
+closeBarCurrent = close
+
+//If current bar open is less than equal to the previous bar close AND current bar open is less than previous bar open AND current bar close is greater than previous bar open THEN True
+bullishEngulfing = openBarCurrent <= closeBarPrevious and openBarCurrent < openBarPrevious and 
+   closeBarCurrent > openBarPrevious
+//If current bar open is greater than equal to previous bar close AND current bar open is greater than previous bar open AND current bar close is less than previous bar open THEN True
+bearishEngulfing = openBarCurrent >= closeBarPrevious and openBarCurrent > openBarPrevious and 
+   closeBarCurrent < openBarPrevious
+
+//bullishEngulfing/bearishEngulfing return a value of 1 or 0; if 1 then plot on chart, if 0 then don't plot
+plotshape(bullE ? bullishEngulfing : na, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.tiny, title="Big Ass Candle Up" )
+plotshape(bearE ? bearishEngulfing : na, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.tiny, title="Big Ass Candle Down")
+
+//alertcondition(bullishEngulfing, title="Bullish Engulfing", message="[CurrencyPair] [TimeFrame], Bullish candle engulfing previous candle")
+//alertcondition(bearishEngulfing, title="Bearish Engulfing", message="[CurrencyPair] [TimeFrame], Bearish candle engulfing previous candle")
+
+// End ###
+
+isTmaOverlayLongSigal = smma1 > smma2 and smma2 > smma3 and smma3 > smma4 //and bullSig
+isTmaOverlayShortSigal = smma1 < smma2 and smma2 < smma3 and smma3 < smma4 //and bearSig
+
+
+longSignal = isLongSignalFromXtrender and isUpTrend and sideways and isLongSignalFromEma21 and isAdxSignal and isStcForLong and isLongSingnalFromVolumeFlow and sidewaysArea > sideways_factor
+shortSignal = isShortSignalFromXtrender and isDownTrend and sideways and isShortSignalFromEma21 and isAdxSignal and isStcForShort and isShortSingnalFromVolumeFlow and sidewaysArea > sideways_factor
+
+// ------ GET IN/OUT A TRADE ------
+
+inLongPosition = strategy.position_size > 0
+inShortPosition = strategy.position_size < 0
+notInTrade = strategy.position_size == 0
+
+stopLoss = input(title="Stop loss (%)", defval=loss_value) / 100
+
+longStopLoss = strategy.position_avg_price * (1 - stopLoss)
+shortStopLoss = strategy.position_avg_price * (1 + stopLoss)
+
+p1 = close / 100 / syminfo.mintick
+
+// Define the length of the lookback period
+length = 10
+
+// Calculate the highest high in the lookback period
+
+// indexOfEntry = strategy.opentrades.entry_bar_index(0)
+// highs = ta.highest(high[indexOfEntry], length)
+// lows = ta.lowest(low[indexOfEntry], length)
+// // Define the swing high as the highest high in the lookback period that is greater than or equal to the high in the previous bar
+// swingHigh = highs >= high[indexOfEntry + 1] ? highs : na
+// swingLow = lows <= low[indexOfEntry + 1] ? lows : na
+
+// longProfit = close[indexOfEntry] + (close[indexOfEntry] - swingLow)
+// shortProfit = close[indexOfEntry] - (swingHigh - close[indexOfEntry])
+
+// plot(swingHigh, "Long Profit", color = color.green, display = showIndicators ? display.all : display.none)
+// plot(swingLow, "Swing low", color = color.red, display = showIndicators ? display.all : display.none)  
+
+// if (longSignal and notInTrade and not isLive)
+// 	strategy.entry("Long_1", strategy.long, comment = "Go long! Profit: " + str.tostring(longProfit) + " SL: " + str.tostring(swingLow) )
+
+// if (shortSignal and notInTrade  and not isLive)
+// 	strategy.entry("Short_1", strategy.short,  comment = "Go short! Profit: " + str.tostring(shortProfit) + " SL: " + str.tostring(swingHigh) )
+
+// if (inLongPosition  and not isLive)
+//     strategy.exit("Long_1_Exit", profit = longProfit , loss = swingLow, qty_percent = 100, comment = "Exit long")
+
+// if (inShortPosition and not isLive)
+//     strategy.exit("Short_1_Exit", profit = shortProfit , loss = swingHigh, qty_percent = 100, comment = "Exit short")
+
+if (longSignal and notInTrade and isLive)
+	strategy.entry("Long_1", strategy.long, comment = "{\n\"message_type\": \"bot\",\n\"bot_id\": 9961981,\n\"email_token\": \"3cb5ac5c-fe5f-4679-9bc9-8cbd62cc8087\",\n\"delay_seconds\": 0\n}")
+
+if (longSignal and notInTrade and not isLive)
+	strategy.entry("Long_1", strategy.long, comment = "Go long")
+
+if (shortSignal and notInTrade and isLive)
+	strategy.entry("Short_1", strategy.short,  comment = "{\n\"message_type\": \"bot\",\n\"bot_id\": 9187308,\n\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\n\"delay_seconds\": 0\n}")
+
+if (shortSignal and notInTrade and not isLive)
+	strategy.entry("Short_1", strategy.short,  comment = "Go short")
+
+if (inLongPosition and isLive)
+    strategy.exit("Long_1_Exit", profit = p1 * pof_and_stop_loss , stop = longStopLoss, qty_percent = 100, comment = "{\n\"action\": \"close_at_market_price\",\n\"message_type\": \"bot\",\n\"bot_id\": 9961981,\n\"email_token\": \"3cb5ac5c-fe5f-4679-9bc9-8cbd62cc8087\",\n\"delay_seconds\": 0\n}")
+
+if (inLongPosition and not isLive)
+    strategy.exit("Long_1_Exit", profit = p1 * pof_and_stop_loss , stop = longStopLoss, qty_percent = 100, comment = "Exit long")
+     
+if (inShortPosition and isLive)
+    strategy.exit("Short_1_Exit", profit = p1 * pof_and_stop_loss , stop = shortStopLoss, qty_percent = 100, comment = "{\n\"action\": \"close_at_market_price\",\n\"message_type\": \"bot\",\n\"bot_id\": 9187308,\n\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\n\"delay_seconds\": 0\n}")
+
+if (inShortPosition and not isLive)
+    strategy.exit("Short_1_Exit", profit = p1 * pof_and_stop_loss , stop = shortStopLoss, qty_percent = 100, comment = "Exit short")
+
+
+
+// if (not time_cond)
+//     strategy.close_all()
+//     strategy.cancel_all()
