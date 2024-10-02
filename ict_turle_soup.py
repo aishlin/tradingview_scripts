@@ -294,7 +294,7 @@ alertcondition(sellAlertTick and not initRun, "Sell Signal", "")
 alertcondition(tpAlertTick and not initRun, "Take-Profit Signal", "")
 alertcondition(slAlertTick and not initRun, "Stop-Loss Signal", "")
 
-length = input(title="Length", defval=32)
+length = input(title="Length", defval=45)
 offset = input(title="Offset", defval=0)
 src = input(close, title="Source")
 lsma = ta.linreg(src, length, offset)
