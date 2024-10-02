@@ -294,25 +294,35 @@ alertcondition(sellAlertTick and not initRun, "Sell Signal", "")
 alertcondition(tpAlertTick and not initRun, "Take-Profit Signal", "")
 alertcondition(slAlertTick and not initRun, "Stop-Loss Signal", "")
 
+length = input(title="Length", defval=32)
+offset = input(title="Offset", defval=0)
+src = input(close, title="Source")
+lsma = ta.linreg(src, length, offset)
+lsma2 = ta.linreg(lsma, length, offset)
+eq= lsma-lsma2
+zlsma = lsma+eq
+
+bool isZlsmaLong = close > zlsma 
+bool isZlsmaShort = close < zlsma 
 if initRun
-    if buyAlertTick and buyAlertEnabled
+    if buyAlertTick and isZlsmaLong and buyAlertEnabled
         alert("Buy Signal")
-        strategy.entry("LongTrade", strategy.long, comment = "{3_commas_buy_signal}")
-    if sellAlertTick and sellAlertEnabled
+        strategy.entry("LongTrade", strategy.long, comment = "")
+    if sellAlertTick and isZlsmaShort and sellAlertEnabled
         alert("Sell Signal")
-        strategy.entry("ShortTrade", strategy.short, comment = "{3_commas_sell_signal}")
+        strategy.entry("ShortTrade", strategy.short, comment = "")
     if tpAlertTick and tpAlertEnabled
         alert("Take-Profit Signal")
         if (strategy.position_size > 0)
-            strategy.close("LongTrade", comment = "{3_commas_close_long_trade}")
+            strategy.close("LongTrade", comment = "")
         else if (strategy.position_size < 0)
-            strategy.close("ShortTrade", comment = "{3_commas_close_short_trade}")
+            strategy.close("ShortTrade", comment = "")
     if slAlertTick and slAlertEnabled
         alert("Stop-Loss Signal")
         if (strategy.position_size > 0)
-            strategy.close("LongTrade", comment = "3_commas_close_long_trade")
+            strategy.close("LongTrade", comment = "")
         else if (strategy.position_size < 0)
-            strategy.close("ShortTrade", comment = "{3_commas_close_short_trade}")
+            strategy.close("ShortTrade", comment = "")
     
 
 //#endregion
