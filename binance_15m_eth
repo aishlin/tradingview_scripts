@@ -2,7 +2,7 @@
 // © fluxchart
 var initRun = true
 //@version=5
-strategy("15M RB | ETH | BINANCE", shorttitle = "15M | ETH | BINANCE", overlay = true, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500, max_bars_back = 4900 + 100)
+strategy("15M | ETH | BINANCE", shorttitle = "15M | ETH | BINANCE", overlay = true, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500, max_bars_back = 4900 + 100)
 import TradingView/Strategy/3
 
 const bool DEBUG = false
@@ -12,7 +12,7 @@ const bool maxTPLastHour = false
 
 
 //pivotLenLiq = input.int(4, "Pivot Length", group = "General Configuration", display = display.none)
-mssOffset = input.int(16, "MSS Swing Length", group = "General Configuration")
+mssOffset = input.int(14, "MSS Swing Length", group = "General Configuration")
 higherTimeframe = input.timeframe("30", "Higher Timeframe", group = "General Configuration")
 breakoutMethod = input.string("Wick", "Breakout Method", options = ["Close", "Wick"], group = "General Configuration")
 entryMethod = input.string("Classic", "Entry Method", options = ["Classic", "Adaptive"], group = "General Configuration", tooltip = "The entry method for the indicator to use. Try changing this setting if you are getting poor results.")
@@ -294,7 +294,7 @@ alertcondition(sellAlertTick and not initRun, "Sell Signal", "")
 alertcondition(tpAlertTick and not initRun, "Take-Profit Signal", "")
 alertcondition(slAlertTick and not initRun, "Stop-Loss Signal", "")
 
-length = input(title="Length", defval=47)
+length = input(title="Length", defval=45)
 offset = input(title="Offset", defval=0)
 src = input(close, title="Source")
 lsma = ta.linreg(src, length, offset)
@@ -309,22 +309,22 @@ isShortZlsma = zlsma > close
 if initRun
     if buyAlertTick and buyAlertEnabled and isBuyZlsma
         alert("Buy Signal")
-        strategy.entry("LongTrade", strategy.long, comment = "{\n\"message_type\": \"bot\",\"bot_id\": 15502592,\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\"delay_seconds\": 0\n}")
+        strategy.entry("LongTrade", strategy.long, comment = "{\n\"message_type\": \"bot\",\"bot_id\": xxx,\"email_token\": \"xxx\",\"delay_seconds\": 0\n}")
     if sellAlertTick and sellAlertEnabled and isShortZlsma
         alert("Sell Signal")
-        strategy.entry("ShortTrade", strategy.short, comment = "{\n\"message_type\": \"bot\",\"bot_id\": 15502717,\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\"delay_seconds\": 0\n}")
+        strategy.entry("ShortTrade", strategy.short, comment = "{\n\"message_type\": \"bot\",\"bot_id\": xxx,\"email_token\": \"xxx\",\"delay_seconds\": 0\n}")
     if tpAlertTick and tpAlertEnabled
         alert("Take-Profit Signal")
         if (strategy.position_size > 0)
-            strategy.close("LongTrade", comment = "{\n\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": 15502592,\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\"delay_seconds\": 0\n}")
+            strategy.close("LongTrade", comment = "{\n\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": xxx,\"email_token\": \"xxx\",\"delay_seconds\": 0\n}")
         else if (strategy.position_size < 0)
-            strategy.close("ShortTrade", comment = "{\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": 15502717,\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\"delay_seconds\": 0\n}")
+            strategy.close("ShortTrade", comment = "{\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": xxx,\"email_token\": \"xxx\",\"delay_seconds\": 0\n}")
     if slAlertTick and slAlertEnabled
         alert("Stop-Loss Signal")
         if (strategy.position_size > 0)
-            strategy.close("LongTrade", comment = "{\n\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": 15502592,\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\"delay_seconds\": 0\n}")
+            strategy.close("LongTrade", comment = "{\n\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": xxx,\"email_token\": \"xxx\",\"delay_seconds\": 0\n}")
         else if (strategy.position_size < 0)
-            strategy.close("ShortTrade", comment = "{\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": 15502717,\"email_token\": \"fd5280a6-db65-4eac-a58a-20bcb6f3bfe9\",\"delay_seconds\": 0\n}")
+            strategy.close("ShortTrade", comment = "{\"action\": \"close_at_market_price\",\"message_type\": \"bot\",\"bot_id\": xxx,\"email_token\": \"xxx\",\"delay_seconds\": 0\n}")
     
 
 //#endregion
