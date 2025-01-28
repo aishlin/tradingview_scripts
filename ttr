@@ -1,0 +1,104 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © aybarsm
+
+//@version=6
+indicator(title = 'Trend Trader-Remastered', shorttitle = 'TTR', overlay = true)
+import aybarsm/tac/3 as tac
+import aybarsm/Tools/12 as tools
+import aybarsm/ToolsMap/2 as tmap
+
+// Inputs
+bool showEntryBuy = input.bool(title = 'Buy: Entry', defval = true, group = 'Show Signals', inline = 'signalsBuy')
+bool showTpBuy = input.bool(title = 'Buy: TP', defval = true, group = 'Show Signals', inline = 'signalsBuy')
+bool showReBuy = input.bool(title = 'Buy: RE', defval = true, group = 'Show Signals', inline = 'signalsBuy')
+bool showExitBuy = input.bool(title = 'Buy: Exit', defval = false, group = 'Show Signals', inline = 'signalsBuy')
+bool showEntrySell = input.bool(title = 'Sell: Entry', defval = true, group = 'Show Signals', inline = 'signalsSell')
+bool showTpSell = input.bool(title = 'Sell: TP', defval = true, group = 'Show Signals', inline = 'signalsSell')
+bool showReSell = input.bool(title = 'Sell: RE', defval = true, group = 'Show Signals', inline = 'signalsSell')
+bool showExitSell = input.bool(title = 'Sell: Exit', defval = false, group = 'Show Signals', inline = 'signalsSell')
+float psarStart = input.float(title = 'Start', minval = 0.001, defval = 0.02, group = 'PSAR', inline = 'psar')
+float psarIncrement = input.float(title = 'Inc', minval = 0.001, defval = 0.02, group = 'PSAR', inline = 'psar')
+float psarMax = input.float(title = 'Max', minval = 0.0001, defval = 0.025, group = 'PSAR', inline = 'psar')
+float minReProximity = input.float(defval = 0, minval = 0, step = 0.01, maxval = 99.99, title = 'Minimum Re-Entry Proximity Ratio', group = 'Signal Fine-Tuning', tooltip = 'Minimum required proximity ratio to PSAR for re-entry signal')
+bool showPsar = input.bool(title = 'PSAR', defval = false, group = 'Show Informative', inline = 'informative')
+bool showPsarLagging = input.bool(title = 'Lagging PSAR', defval = true, group = 'Show Informative', inline = 'informative')
+bool showPosEntryPrice = input.bool(title = 'Pos Entry', defval = false, group = 'Show Informative', inline = 'informative')
+
+// One-time Variables
+var tools.PosInfo pos = na
+var tools.Fractals fractals = tools.Fractals.new()
+fractals := tools.processFractals(fractals, high, low, 2, 2)
+
+// Each bar Variables
+[psar, psar_lagging, psar_fast] = tac.sar(psarStart, psarIncrement,  psarMax)
+float psarProximity = math.round(math.abs(close - psar_lagging) / psar_lagging * 100, 2)
+map<string, bool> chk = map.new<string, bool>()
+tools.PosTPInfo lastTp = na
+tools.PosREInfo lastRe = na
+tools.FracInfo fracSig = na
+
+// Initial definitions
+chk.put('enterBuy', ta.crossover(high, psar_lagging))
+chk.put('enterSell', ta.crossunder(low, psar_lagging))
+pos := chk.get('enterBuy') or chk.get('enterSell') ? tools.new_pos(chk.get('enterBuy') ? tools.PosState.buy : tools.PosState.sell, psar_lagging) : pos
+chk.put('posBuy', not na(pos) ? pos.state == tools.PosState.buy : false)
+chk.put('posSell', not na(pos) ? pos.state == tools.PosState.sell : false)
+chk.put('upBoEligible', close[1] > open[1] and close <= open)
+chk.put('downBoEligible', close[1] < open[1] and close >= open)
+
+if not na(pos)
+    lastTp := array.size(pos.tp) > 0 ? array.last(pos.tp) : na
+    lastRe := array.size(pos.re) > 0 ? array.last(pos.re) : na
+
+    if array.size(fractals.hh) > 0 and chk.get('upBoEligible') and (chk.get('posBuy') or chk.get('posSell') and not na(lastTp))
+        for i = math.max(0, array.size(fractals.hh) - 2) to array.size(fractals.hh) - 1 by 1
+            tools.FracInfo fracHH = array.get(fractals.hh, i)
+            if na(fracHH.boPrice) or fracHH.boTime < pos.when
+                continue
+
+            chk.put('tpBuy', chk.get('posBuy') and close > pos.price ? na(lastTp) ? true : close > lastTp.price and fracHH.when > lastTp.markWhen : false)
+            chk.put('reSell', chk.get('posSell') and psarProximity > minReProximity ? na(lastRe) ? true : lastTp.when > lastRe.when and fracHH.when > lastRe.markWhen : false)
+            if chk.get('tpBuy') or chk.get('reSell')
+                fracSig := fracHH
+                break
+
+    if array.size(fractals.ll) > 0 and chk.get('downBoEligible') and (chk.get('posSell') or chk.get('posBuy') and not na(lastTp))
+        for i = math.max(0, array.size(fractals.ll) - 2) to array.size(fractals.ll) - 1 by 1
+            tools.FracInfo fracLL = array.get(fractals.ll, i)
+            if na(fracLL.boPrice) or fracLL.boTime < pos.when
+                continue
+
+            chk.put('tpSell', chk.get('posSell') and close < pos.price ? na(lastTp) ? true : close < lastTp.price and fracLL.when > lastTp.markWhen : false)
+            chk.put('reBuy', chk.get('posBuy') and psarProximity > minReProximity ? na(lastRe) ? true : lastTp.when > lastRe.when and fracLL.when > lastRe.markWhen : false)
+            if chk.get('tpSell') or chk.get('reBuy')
+                fracSig := fracLL
+                break
+
+if tmap.def(chk, 'tpBuy') or tmap.def(chk, 'tpSell')
+    array.push(pos.tp, tools.PosTPInfo.new(close, time, fracSig.price, fracSig.when))
+
+if tmap.def(chk, 'reBuy') or tmap.def(chk, 'reSell')
+    array.push(pos.re, tools.PosREInfo.new(close, time, fracSig.price, fracSig.when))
+
+plotshape(showEntryBuy and chk.get('enterBuy'), style = shape.labelup, location = location.belowbar, color = color.green, size = size.tiny, title = 'BUY', text = 'BUY', textcolor = color.white, force_overlay = true)
+plotshape(showEntrySell and chk.get('enterSell'), style = shape.labeldown, location = location.abovebar, color = color.red, size = size.tiny, title = 'SELL', text = 'SELL', textcolor = color.white, force_overlay = true)
+plotshape(showExitSell and chk.get('enterBuy'), style = shape.labeldown, location = location.abovebar, color = color.red, size = size.tiny, title = 'EXIT SELL', text = 'EXIT SELL', textcolor = color.white, force_overlay = true)
+plotshape(showExitBuy and chk.get('enterSell'), style = shape.labelup, location = location.belowbar, color = color.green, size = size.tiny, title = 'EXIT BUY', text = 'EXIT BUY', textcolor = color.white, force_overlay = true)
+plotshape(showTpBuy and tmap.def(chk, 'tpBuy'), style = shape.labeldown, location = location.abovebar, color = color.teal, size = size.tiny, title = 'BUY TP', text = 'TP', textcolor = color.white, force_overlay = true)
+plotshape(showTpSell and tmap.def(chk, 'tpSell'), style = shape.labelup, location = location.belowbar, color = color.maroon, size = size.tiny, title = 'SELL TP', text = 'TP', textcolor = color.white, force_overlay = true)
+plotshape(showReBuy and tmap.def(chk, 'reBuy'), style = shape.labelup, location = location.belowbar, color = color.olive, size = size.tiny, title = 'BUY RE', text = 'RE', textcolor = color.white, force_overlay = true)
+plotshape(showReSell and tmap.def(chk, 'reSell'), style = shape.labeldown, location = location.abovebar, color = color.purple, size = size.tiny, title = 'SELL RE', text = 'RE', textcolor = color.white, force_overlay = true)
+
+plot(showPsar ? psar : na, title = 'PSAR', style = plot.style_line, color = psar < low ? color.lime : color.red)
+plot(showPsarLagging ? psar_lagging : na, title = 'Lagging PSAR', color = psar_lagging < low ? color.yellow : color.fuchsia, style = plot.style_line)
+plot(showPosEntryPrice and not na(pos) ? pos.price : na, title = 'PosEntryPrice', color = color.white, style = plot.style_line)
+plot(not na(pos) ? pos.price : na, title = 'AlertPosEntryValue', color = color.white, style = plot.style_line, display = display.none)
+
+alertcondition(chk.get('enterBuy'), title = 'Enter-Buy', message = 'TTR|Enter-Buy|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{plot("AlertPosEntryValue")}}')
+alertcondition(chk.get('enterSell'), title = 'Enter-Sell', message = 'TTR|Enter-Sell|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{plot("AlertPosEntryValue")}}')
+alertcondition(chk.get('enterSell'), title = 'Exit-Buy', message = 'TTR|Exit-Buy|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{plot("AlertPosEntryValue")}}')
+alertcondition(chk.get('enterBuy'), title = 'Exit-Sell', message = 'TTR|Exit-Sell|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{plot("AlertPosEntryValue")}}')
+alertcondition(tmap.def(chk, 'tpBuy'), title = 'TP-Buy', message = 'TTR|TP-Buy|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{close}}')
+alertcondition(tmap.def(chk, 'tpSell'), title = 'TP-Sell', message = 'TTR|TP-Sell|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{close}}')
+alertcondition(tmap.def(chk, 'reBuy'), title = 'RE-Buy', message = 'TTR|RE-Buy|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{close}}')
+alertcondition(tmap.def(chk, 'reSell'), title = 'RE-Sell', message = 'TTR|RE-Sell|{{ticker}}|{{exchange}}|{{interval}}|{{time}}|{{close}}')
